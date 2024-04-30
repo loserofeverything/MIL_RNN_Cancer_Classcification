@@ -16,39 +16,7 @@ from models import RNN, MODEL
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_curve, auc
 
-"""class MyDataset(Dataset):
-    def __init__(self, df):
-        self.df = df
-        self.df['data'] = self.df['data'].apply(eval)
 
-    def extract_data(self, topk=None):
-        if topk is not None:
-            # 创建一个空DataFrame，用于存放符合条件的行
-            filtered_rows_list = []
-            # 遍历grad列表
-            for key, sample_value, v2, label, idx in tqdm(topk, desc="Extracting", total=len(topk)):
-                # 应用筛选条件：行中列sample值等于sample_value，且4-mer列的值等于key
-                # filtered_rows = self.df[(self.df['sample'] == sample_value) & (self.df['4-mer'] == key)]
-                filtered_rows = self.df.iloc[idx]
-                # 将筛选出来的行添加到new_df中
-                filtered_rows_list.append(filtered_rows)
-            # self.df_extract = self.df.loc[self.df['4-mer'].isin(topk.keys())].reset_index(drop=True)
-            self.df_extract = pd.concat(filtered_rows_list, axis=1).T.reset_index(drop=True)
-        else:
-            self.df_extract = self.df.copy()
-
-    def __len__(self):
-        return len(self.df_extract)
-
-    def __getitem__(self, idx):
-        data = torch.tensor(self.df_extract['data'][idx], dtype=torch.float32).view(-1)
-        _4mer_RA = torch.tensor(self.df_extract['RA_4mer'][idx], dtype=torch.float32)
-        _tcr_RA = torch.tensor(self.df_extract['RA_TCR'][idx], dtype=torch.float32)
-        name = self.df_extract['4-mer'][idx]
-        sample = self.df_extract['sample'][idx]
-        label = torch.tensor(self.df_extract['label'][idx], dtype=torch.long)
-        return data, _4mer_RA, _tcr_RA, name, label, sample
-"""
 
 class MyDataset(Dataset):
     """
@@ -391,36 +359,7 @@ def read_files(fileslist):
     result = pd.concat(dfs, ignore_index=True)
     return result
 
-'''
-def find_topk(res, topk):
-    # 按照v1值对列表进行排序，为分组做准备
-    res_sorted = sorted(res, key=lambda x: x[1])
-    
-    # 结果列表
-    result = []
-    print("start find topk")
-    # 按v1值进行分组
-    for v1, group in groupby(res_sorted, key=lambda x: x[1]):
-        # 在每个分组内按照v2值进行排序（降序），提取前topk个元素
-        topk_tuples = sorted(group, key=lambda x: float(x[2]), reverse=True)[:topk]
-        # 将提取的元组添加到结果列表中，但是只包括key和v1
-        result.extend([(key, v1, v2, label, idx) for key, _, v2, label, idx in topk_tuples])
-    
-    return result
-'''
 
-def evaluate(topklist):
-    correct_count = 0
-    for _, _,_,_, label,_,pred in topklist:
-        # 将预测值转换为0或1
-        pred_label = 1 if pred >= 0.5 else 0
-        # 如果预测值和实际标签相同，那么增加计数器
-        if pred_label == label:
-            correct_count += 1
-
-    # 计算正确率
-    accuracy = correct_count / len(topklist)
-    return accuracy
 
 
 def find_topk(res, topk):
@@ -474,65 +413,7 @@ def inference(model, dataloader, device, topk, mode="4mer"):
     return topk_res
 
 
-"""def inference(model, dataloader, device, topk, mode="4mer"):
-    model.eval()
-    res = []
-    with torch.no_grad():
-        for batch_idx, (data, _4mer_RA, tcr_RA, names, labels, samples) in tqdm(enumerate(dataloader), desc=\
-                                                                                "Inferencing", total=len(dataloader)):
-            # Rest of the code
-            data = data.to(device)
-            if mode == "4mer":
-                RA = _4mer_RA.view(-1, 1).to(device)
-            else:
-                RA = tcr_RA.view(-1, 1).to(device)
-            outputs = model(data, RA)
-            outputs = F.softmax(outputs, dim=1)
-            outputs = outputs[:, 1].cpu()
-            # 将 outputs 转换为一维并转换为 Python 列表
-            outputs_list = outputs.view(-1).tolist()
-            b_l = labels.size(0)
-            labels_list = labels.view(-1).tolist()
-            # 向列表中插入新的键值对
-            # for key, v1, v2, labels in zip(names, samples, outputs_list, labels_list):
-            #     res.append((key, v1, v2, labels))
-            for j in range(b_l):
-                res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
-                    names[j], labels_list[j], samples[j], outputs_list[j]))
-        topk_res = find_topk(res, topk)
 
-    return topk_res"""
-
-'''
-def inference(model, dataloader, device, topk, mode="4mer"):
-    model.eval()
-    res = []
-    with torch.no_grad():
-        for batch_idx, (data, _4mer_RA, tcr_RA, names, labels, samples) in tqdm(enumerate(dataloader), desc=\
-                                                                                "Inferencing", total=len(dataloader)):
-            # Rest of the code
-            data = data.to(device)
-            if mode == "4mer":
-                RA = _4mer_RA.view(-1, 1).to(device)
-            else:
-                RA = tcr_RA.view(-1, 1).to(device)
-            outputs = model(data, RA)
-            outputs = F.softmax(outputs, dim=1)
-            outputs = outputs[:, 1].cpu()
-            # 将 outputs 转换为一维并转换为 Python 列表
-            outputs_list = outputs.view(-1).tolist()
-            b_l = labels.size(0)
-            labels_list = labels.view(-1).tolist()
-            # 向列表中插入新的键值对
-            # for key, v1, v2, labels in zip(names, samples, outputs_list, labels_list):
-            #     res.append((key, v1, v2, labels))
-            for j in range(b_l):
-                idx = batch_idx*b_l + j
-                res.append((names[j], samples[j], outputs_list[j], labels_list[j], idx))
-        topk_res = find_topk(res, topk)
-
-    return topk_res
-'''
 
 def train_MIL(model, dataloader, criterion, device, lr_decay, optimizer, scaler, lr_scheduler, mode="4mer"):
     model.train()
