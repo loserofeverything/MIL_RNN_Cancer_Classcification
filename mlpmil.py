@@ -113,10 +113,10 @@ for epoch in range(num_epochs):
     # val_acc.append(val_acc_)
     print("Acc:", train_acc_)
     if train_acc_ > best_acc:
-        if os.path.exists(os.path.join(save_dir, file_dir, file_name)) is False:
-            os.makedirs(os.path.join(save_dir, file_dir, file_name))
+        if os.path.exists(os.path.join(save_dir, file_name, file_dir)) is False:
+            os.makedirs(os.path.join(save_dir, file_name, file_dir))
         best_acc = train_acc_
-        best_model = os.path.join(os.path.join(save_dir, file_dir, file_name), "{}-{}-{}.pth".format(file_name, epoch, best_acc))
+        best_model = os.path.join(os.path.join(save_dir, file_name, file_dir), "{}-{}-{}.pth".format(file_name, epoch, best_acc))
         torch.save(model.state_dict(), best_model)
     memory = max_memory_allocated()
     print('memory allocated:',memory/(1024 ** 3), 'G')
