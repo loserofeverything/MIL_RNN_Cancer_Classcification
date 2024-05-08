@@ -216,6 +216,8 @@ class siglefiletest(Preparation):
         return dataloader
 
 
+mfs = ['H2001H023-lung', 'H2001H517-breast', 'H2001I070-breast', 'H2001H565-colorectal', 'H2001B315-breast', 'H2001H557-liver', ]
+
 cancer_type = 'lung'
 missingfile = "H2001H023.clonotypes.TRB.txt"
 directory = "/xiongjun/test/MIL/share/MixResult_UID_All"
