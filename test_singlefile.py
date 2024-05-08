@@ -266,7 +266,7 @@ batch_size2 = 1
 rnn = RNN(128, 256, 2, 7, device)
 criterion = MyLoss()
 optimizer = optim.SGD(rnn.parameters(), 0.1, momentum=0.9, dampening=0, weight_decay=1e-4, nesterov=True)
-RA_path = "/xiongjun/test/MIL/testsinglefile/*/*.csv"
+RA_path = "/xiongjun/test/MIL/testsinglefile/{}/*.csv".format(tid)
 MIL_dir = "40_128_4mer"
 test_save_dir = "/xiongjun/test/MIL/testsinglefile"
 
