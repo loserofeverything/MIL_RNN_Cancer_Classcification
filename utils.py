@@ -489,7 +489,7 @@ def train_RNN(epoch, embedder, rnn, dataloader, criterion, optimizer, device, mo
         print("Batch",batch_idx + 1/len(dataloader), "Loss:", loss / b_l, "Acc:",  correct / b_l)
     return running_loss / total, running_correct / total
 
-def test_RNN(epoch, embedder, rnn, dataloader, criterion, device, save_dir = '/xiongjun/test/MIL/figs',mode="4mer", picname = "ROC"):
+def test_RNN(epoch, embedder, rnn, dataloader, criterion, device, save_dir = '/xiongjun/test/MIL/figs',mode="4mer", picname = "ROC", choice = "True"):
     rnn.eval()
     running_loss = 0.
     running_correct = 0
@@ -534,23 +534,25 @@ def test_RNN(epoch, embedder, rnn, dataloader, criterion, device, save_dir = '/x
             accu_out.append(output)
             accu_labels.append(labels)
 
-        # 使用torch.cat将它们堆叠起来
-        total_out = torch.cat(accu_out, dim=0).numpy()
-        total_labels = torch.cat(accu_labels, dim=0).numpy()
-        for i in range(7):
-            fpr, tpr, _ = roc_curve(total_labels == i, total_out[:, i])
-            roc_auc = auc(fpr, tpr)
-            plt.plot(fpr, tpr, label=f'Class {i} (area = {roc_auc:.2f})')
 
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('ROC Curve')
-        plt.legend(loc="lower right")
-        folder = os.path.join(save_dir, 'figs')
-        if os.path.exists(folder) is False:
-            os.mkdir(folder)
-        plt.savefig(os.path.join(folder, picname + '.png'))
-        plt.close()
+        if choice == "True":
+            # 使用torch.cat将它们堆叠起来
+            total_out = torch.cat(accu_out, dim=0).numpy()
+            total_labels = torch.cat(accu_labels, dim=0).numpy()
+            for i in range(7):
+                fpr, tpr, _ = roc_curve(total_labels == i, total_out[:, i])
+                roc_auc = auc(fpr, tpr)
+                plt.plot(fpr, tpr, label=f'Class {i} (area = {roc_auc:.2f})')
+
+            plt.plot([0, 1], [0, 1], 'k--')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('ROC Curve')
+            plt.legend(loc="lower right")
+            folder = os.path.join(save_dir, 'figs')
+            if os.path.exists(folder) is False:
+                os.mkdir(folder)
+            plt.savefig(os.path.join(folder, picname + '.png'))
+            plt.close()
 
     return running_loss / total, running_correct / total
