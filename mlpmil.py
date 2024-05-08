@@ -10,7 +10,7 @@ import random
 import os
 import time
 from transformers import get_cosine_schedule_with_warmup
-from utils import train_MIL, evaluate, inference, MyDataset, MyLoss, read_files
+from utils import train_MIL, inference, MyDataset, MyLoss, read_files
 from models import MODEL
 
 
