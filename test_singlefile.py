@@ -146,18 +146,6 @@ class siglefiletest(Preparation):
         
         if os.path.exists(path) is False:
             os.mkdir(path)
-        datasets = []
-        file_names = ['train.pkl']
-        for file_name in file_names:
-            file_path = os.path.join(path, file_name)
-            if os.path.isfile(file_path):
-                with open(file_path, 'rb') as f:
-                    data = pickle.load(f)
-                    datasets.append(data)
-            else:
-                break
-        if len(datasets) == 1:
-            return datasets[0]
         
         train_files = []
         val_files = []
@@ -228,8 +216,8 @@ class siglefiletest(Preparation):
         return dataloader
 
 
-cancer_type = 'liver'
-missingfile = "H2001H557.clonotypes.TRB.txt"
+cancer_type = 'lung'
+missingfile = "H2001H023.clonotypes.TRB.txt"
 directory = "/xiongjun/test/MIL/share/MixResult_UID_All"
 file_path = os.path.join(directory, missingfile)
 RA = readRA(file_path, 0.9, cancer_type)
