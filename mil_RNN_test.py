@@ -79,3 +79,11 @@ new_rnn = RNN(128, 256, 2, 7, device)
 new_rnn.load_state_dict(torch.load(os.path.join(save_dir, save_name, best_model)))
 _loss_, _acc_ = test_RNN(114514, embs, new_rnn, train_dataloader, criterion, device)
 print(_acc_, _loss_)
+
+
+
+
+
+
+
+
