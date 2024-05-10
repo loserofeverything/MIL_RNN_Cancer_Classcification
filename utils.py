@@ -407,7 +407,7 @@ def inference(model, dataloader, device, topk, mode="4mer"):
             #     res.append((key, v1, v2, labels))
             for j in range(b_l):
                 res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
-                    names[j], labels_list[j], samples[j], outputs[j][labels_list[j]].item()))
+                    names[j], labels_list[j], samples[j], outputs[j][6].item()))
         topk_res = find_topk(res, topk)
 
     return topk_res

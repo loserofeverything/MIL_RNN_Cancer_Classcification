@@ -1,11 +1,8 @@
 import os
 import glob
-from tqdm import tqdm
 import pandas as pd
 import numpy as np
-import time
-import re
-import matplotlib.pyplot as plt
+import shutil
 import random
 import torch
 import torch.optim as optim
@@ -37,7 +34,10 @@ def sequence_to_values(sequence):
 
 def calRA(raw_data, sample_name, keep, types, RA_save_dir ,amino_acids=set('ACDEFGHIKLMNPQRSTVWY'),\
           values = ['breast', 'prostate', 'lung', 'liver', 'pancreas', 'colorectal', 'health']):
-    if len(raw_data) <= 1000:
+    
+    tid = values.index(types)
+
+    if len(raw_data) <= 200:
         return
     raw_data['aaSeqCDR3_length'] = raw_data['aaSeqCDR3'].str.len()
 
@@ -111,24 +111,32 @@ def calRA(raw_data, sample_name, keep, types, RA_save_dir ,amino_acids=set('ACDE
     # 使用 '4-mer' 列的值创建新的列
     RA_stats['data'] = RA_stats['4-mer'].apply(sequence_to_values)
     RA_stats['sample'] = sample_name
+    sdir = "/xiongjun/test/MIL/testsinglefile"
+    sname = sample_name + "_RA.csv"
+    spath = os.path.join(sdir, str(tid))
+    if os.path.exists(spath) is False:
+        os.mkdir(spath)
     label = values.index(types)
     RA_stats['label'] = label
     RA_stats.set_index('4-mer', inplace=True)
-    return RA_stats
+    RA_stats.to_csv(os.path.join(spath, sname))
 
 def readRA(filename, keep, cancer_type):
     # 读取文件
-    path_parts = os.path.split(filename)
-    name = path_parts[1]
-    raw_data = pd.read_csv(filename, sep='\t')
-    raw_data['sample'] = name.split('.')[0] 
+
+    column_names = ["aaSeqCDR3", "cloneFraction", "sth1", "sample"]
+    # 读取CSV文件
+    raw_data = pd.read_csv(filename, names=column_names)
+    # path_parts = os.path.split(filename)
+    # name = path_parts[1]
+    # raw_data = pd.read_csv(filename, sep='\t')
+    # raw_data['sample'] = name.split('.')[0] 
     types = cancer_type
     # 创建一个新的列来存储aaSeqCDR3列中元素的长度
     df_group = raw_data.groupby('sample')
     RA_save = str(keep) + '_RA'
     for  sample_id, (sample_name, df) in enumerate(df_group):
-        RA = calRA(df, sample_name, keep, types, RA_save)
-    return RA
+        calRA(df, sample_name, keep, types, RA_save)
 
 class siglefiletest(Preparation):
     def loadData(self):
@@ -218,19 +226,23 @@ class siglefiletest(Preparation):
 
 mfs = ['H2001H023-lung', 'H2001H517-breast', 'H2001I070-breast', 'H2001H565-colorectal', 'H2001B315-breast', 'H2001H557-liver', ]
 
-cancer_type = 'lung'
-missingfile = "H2001H023.clonotypes.TRB.txt"
-directory = "/xiongjun/test/MIL/share/MixResult_UID_All"
-file_path = os.path.join(directory, missingfile)
-RA = readRA(file_path, 0.9, cancer_type)
+cancer_type = 'health'
+file_path = "/xiongjun/test/MIL/data/healthy/emerson_healthy_train.csv"
+
+# 遍历文件夹中的所有文件/文件夹
+for filename in os.listdir("/xiongjun/test/MIL/testsinglefile"):
+    # 检查文件名是否为正整数
+    if filename.isdigit():
+        # 构造完整的文件/文件夹路径
+        file_path = os.path.join("/xiongjun/test/MIL/testsinglefile", filename)
+        # 检查这是否是一个文件夹
+        if os.path.isdir(file_path):
+            # 删除文件夹
+            shutil.rmtree(file_path)
+
+readRA(file_path, 0.9, cancer_type)
 values = ['breast', 'prostate', 'lung', 'liver', 'pancreas', 'colorectal', 'health']
 tid = values.index(cancer_type)
-
-if os.path.exists("/xiongjun/test/MIL/testsinglefile/{}".format(tid)) is False:
-    os.mkdir("/xiongjun/test/MIL/testsinglefile/{}".format(tid))
-
-RA.to_csv("/xiongjun/test/MIL/testsinglefile/{}/RA.csv".format(tid))
-
 
 
 # Check if GPU is available
