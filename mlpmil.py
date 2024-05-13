@@ -32,48 +32,60 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 
-# # 获取所有的文件
-# RA_files = glob.glob('/xiongjun/test/MIL/data/0.9_RA/*/*.csv')
-# print(len(RA_files))
+# 获取所有的文件
+RA_files = glob.glob('/xiongjun/test/MIL/data/0.9_RA/*/*.csv')
+print(len(RA_files))
 
-# # 获取所有的标签
-# labels = set([file.split('/')[-2] for file in RA_files])
-# print(labels)
+# 获取所有的标签
+labels = set([file.split('/')[-2] for file in RA_files])
+print(labels)
 
-# # 初始化训练集、验证集和测试集
-# train_files = []
-# val_files = []
-# test_files = []
+# 初始化训练集、验证集和测试集
+train_files = []
+val_files = []
+test_files = []
 
-# # 对每个标签，随机分配文件到训练集、验证集和测试集
-# for label in labels:
-#     label_files = [file for file in RA_files if file.split('/')[-2] == label]
-#     np.random.shuffle(label_files)
-#     n = len(label_files)
-#     train_files += label_files[:int(n*1.0)]
-#     val_files += label_files[int(n*1.0):int(n*1.0)]
-#     test_files += label_files[int(n*1.0):]
+# 对每个标签，随机分配文件到训练集、验证集和测试集
+for label in labels:
+    label_files = [file for file in RA_files if file.split('/')[-2] == label]
+    np.random.shuffle(label_files)
+    n = len(label_files)
+    train_files += label_files[:int(n * 1.0)]
+    val_files += label_files[int(n * 1.0):int(n * 1.0)]
+    test_files += label_files[int(n * 1.0):]
 
-# print(f"Train: {len(train_files)} Val: {len(val_files)} Test: {len(test_files)}")
+print(f"Train: {len(train_files)} Val: {len(val_files)} Test: {len(test_files)}")
 
-with open(\
-    "/xiongjun/test/MIL/new_saved/dataset/0.9_RA_[0.7-0.2-0.1]/train.pkl", 'rb')\
-          as f:
-    train_dataset = pickle.load(f)
-with open(\
-    "/xiongjun/test/MIL/new_saved/dataset/0.9_RA_[0.7-0.2-0.1]/val.pkl", 'rb')\
-          as f:
-    val_dataset = pickle.load(f)
-with open(\
-    "/xiongjun/test/MIL/new_saved/dataset/0.9_RA_[0.7-0.2-0.1]/test.pkl", 'rb')\
-          as f:
-    test_dataset = pickle.load(f)
-# val_dataset = MyDataset(read_files(val_files))
-# test_dataset = MyDataset(read_files(test_files))
+# with open(\
+#     "/xiongjun/test/MIL/new_saved/dataset/0.9_RA_[0.7-0.2-0.1]/train.pkl", 'rb')\
+#           as f:
+#     train_dataset = pickle.load(f)
+# with open(\
+#     "/xiongjun/test/MIL/new_saved/dataset/0.9_RA_[0.7-0.2-0.1]/val.pkl", 'rb')\
+#           as f:
+#     val_dataset = pickle.load(f)
+# with open(\
+#     "/xiongjun/test/MIL/new_saved/dataset/0.9_RA_[0.7-0.2-0.1]/test.pkl", 'rb')\
+#           as f:
+#     test_dataset = pickle.load(f)
 
 
-# train_dataset.df = pd.concat
-train_dataset.setmode(0)
+if os.path.exists("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset") is False:
+     os.mkdir("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset")
+
+
+if os.path.isfile("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset/train.pkl"):
+     with open("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset/train.pkl", 'rb') as f:
+          train_dataset = pickle.load(f)
+else:    
+    train_dataset = MyDataset(read_files(train_files))
+    with open(os.path.join("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset", \
+                       'train.pkl'), 'wb') as f:
+            pickle.dump(train_dataset, f)
+
+
+
+
 train_loss = []
 test_acc = []
 test_loss = []
@@ -107,7 +119,8 @@ scaler = GradScaler()
 
 
 lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=10, \
-                                    num_training_steps=746 * topk / batch_size2 * num_epochs)
+                                    num_training_steps=1067 * topk / batch_size2 * num_epochs)
+
 
 for epoch in range(num_epochs): 
     print(f"Epoch {epoch + 1}/{num_epochs}")
