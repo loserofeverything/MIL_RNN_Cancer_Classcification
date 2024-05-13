@@ -40,8 +40,8 @@ class MyDataset(Dataset):
     def __init__(self, df):
         self.df = df
         # self.df['data'] = self.df['data'].apply(eval)
-        self.df['data'] = self.parallelize_dataframe(self.df['data'],\
-            self.process_data, multiprocessing.cpu_count())
+        self.df['data'] = parallelize_dataframe(self.df['data'],\
+            process_data, multiprocessing.cpu_count())
         print("df rows: ", len(self.df))
 
     def tuples_to_df(self, tplist):
@@ -90,16 +90,6 @@ class MyDataset(Dataset):
         label = torch.tensor(self.df_extract['label'][idx], dtype=torch.long)
         return data, _4mer_RA, _tcr_RA, name, label, sample
 
-    def process_data(self, data):
-        return data.apply(ast.literal_eval)
-
-    def parallelize_dataframe(self, df, func, n_cores):
-        df_split = np.array_split(df, n_cores)
-        pool = multiprocessing.Pool(n_cores)
-        df = pd.concat(pool.map(func, df_split))
-        pool.close()
-        pool.join()
-        return df
 
 class rnndataset(MyDataset):
     '''
@@ -360,6 +350,19 @@ class MyLoss(nn.Module):
     def forward(self, outputs, labels):
         return self.loss(outputs, labels)
 
+def process_data(data):
+    return data.apply(ast.literal_eval)
+
+def parallelize_dataframe(df, func, n_cores):
+    df_split = np.array_split(df, n_cores)
+    pool = multiprocessing.Pool(n_cores)
+    df = pd.concat(pool.map(func, df_split))
+    pool.close()
+    pool.join()
+    return df
+
+
+
 def read_file(file):
     return pd.read_csv(file)
 
@@ -412,17 +415,23 @@ def inference(model, dataloader, device, topk, mode="4mer"):
                 RA = tcr_RA.view(-1, 1).to(device)
             outputs = model(data, RA)
             outputs = F.softmax(outputs, dim=1)
-            outputs = outputs.cpu()
+            maxdata, maxidx = torch.max(outputs, dim=1)  # Find max values and their indices
+            maxdata = maxdata.cpu()
+            maxidx = maxidx.cpu().tolist()
+            # outputs = outputs.cpu()
             # 将 outputs 转换为一维并转换为 Python 列表
             # outputs_list = outputs.view(-1).tolist()
             b_l = labels.size(0)
-            labels_list = labels.view(-1).tolist()
+            # labels_list = labels.view(-1).tolist()
             # 向列表中插入新的键值对
             # for key, v1, v2, labels in zip(names, samples, outputs_list, labels_list):
             #     res.append((key, v1, v2, labels))
+            # for j in range(b_l):
+            #     res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
+            #         names[j], labels_list[j], samples[j], outputs[j][6].item()))
             for j in range(b_l):
                 res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
-                    names[j], labels_list[j], samples[j], outputs[j][6].item()))
+                    names[j], maxidx[j], samples[j], maxdata[j].item()))
         topk_res = find_topk(res, topk)
 
     return topk_res
