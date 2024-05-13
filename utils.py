@@ -15,7 +15,9 @@ import torch.nn.functional as F
 from models import RNN, MODEL
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import roc_curve, auc
-
+import concurrent.futures
+import multiprocessing
+import ast
 
 
 class MyDataset(Dataset):
@@ -37,7 +39,9 @@ class MyDataset(Dataset):
 
     def __init__(self, df):
         self.df = df
-        self.df['data'] = self.df['data'].apply(eval)
+        # self.df['data'] = self.df['data'].apply(eval)
+        self.df['data'] = self.parallelize_dataframe(self.df['data'],\
+            self.process_data, multiprocessing.cpu_count())
         print("df rows: ", len(self.df))
 
     def tuples_to_df(self, tplist):
@@ -85,6 +89,17 @@ class MyDataset(Dataset):
         sample = self.df_extract['sample'][idx]
         label = torch.tensor(self.df_extract['label'][idx], dtype=torch.long)
         return data, _4mer_RA, _tcr_RA, name, label, sample
+
+    def process_data(self, data):
+        return data.apply(ast.literal_eval)
+
+    def parallelize_dataframe(self, df, func, n_cores):
+        df_split = np.array_split(df, n_cores)
+        pool = multiprocessing.Pool(n_cores)
+        df = pd.concat(pool.map(func, df_split))
+        pool.close()
+        pool.join()
+        return df
 
 class rnndataset(MyDataset):
     '''
@@ -345,13 +360,13 @@ class MyLoss(nn.Module):
     def forward(self, outputs, labels):
         return self.loss(outputs, labels)
 
+def read_file(file):
+    return pd.read_csv(file)
+
 def read_files(fileslist):
-    # 初始化一个空的DataFrame列表
-    dfs = []
-    # 读取每个文件并添加到列表中
-    for file in fileslist:
-        df = pd.read_csv(file)
-        dfs.append(df)
+    # 使用进程池来并行读取文件
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        dfs = list(executor.map(read_file, fileslist))
 
     # 合并所有的DataFrame
     if not dfs:
