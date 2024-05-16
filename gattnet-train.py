@@ -11,8 +11,8 @@ import random
 import os
 import time
 from transformers import get_cosine_schedule_with_warmup
-from utils import train_MIL, inference, MyDataset, MyLoss, read_files
-from models import MODEL
+from utils import train_GATTNET, test_GATTNET, rnndataset, GATTNET_Loss, read_files
+from models import MODEL, GAttNet
 
 
 # Check if GPU is available
@@ -50,8 +50,8 @@ for label in labels:
     label_files = [file for file in RA_files if file.split('/')[-2] == label]
     np.random.shuffle(label_files)
     n = len(label_files)
-    train_files += label_files[:int(n * 1.0)]
-    val_files += label_files[int(n * 1.0):int(n * 1.0)]
+    train_files += label_files[:int(n * 0.8)]
+    val_files += label_files[int(n * 0.8):int(n * 1.0)]
     test_files += label_files[int(n * 1.0):]
 
 print(f"Train: {len(train_files)} Val: {len(val_files)} Test: {len(test_files)}")
@@ -70,21 +70,33 @@ print(f"Train: {len(train_files)} Val: {len(val_files)} Test: {len(test_files)}"
 #     test_dataset = pickle.load(f)
 
 
-if os.path.exists("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset") is False:
-     os.mkdir("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset")
+if os.path.exists("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchDataset") is False:
+     os.mkdir("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchDataset")
 
 
-if os.path.isfile("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset/train.pkl"):
-     with open("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset/train.pkl", 'rb') as f:
-          train_dataset = pickle.load(f)
+# if os.path.isfile("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchMyDataset/train.pkl"):
+#      with open("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchDataset/train.pkl", 'rb') as f:
+#           train_dataset = pickle.load(f)
+# else:    
+#     train_dataset = rnndataset(read_files(train_files))
+#     with open(os.path.join("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchDataset", \
+#                        'train.pkl'), 'wb') as f:
+#             pickle.dump(train_dataset, f)
+
+if os.path.isfile("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchMyDataset/val.pkl"):
+     with open("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchDataset/val.pkl", 'rb') as f:
+          val_dataset = pickle.load(f)
 else:    
-    train_dataset = MyDataset(read_files(train_files))
-    with open(os.path.join("/xiongjun/test/MIL/new_saved/dataset/full_train_MyDataset", \
-                       'train.pkl'), 'wb') as f:
-            pickle.dump(train_dataset, f)
+    val_dataset = rnndataset(read_files(val_files))
+    with open(os.path.join("/xiongjun/test/MIL/new_saved/dataset/full_train_sampleBatchDataset", \
+                       'val.pkl'), 'wb') as f:
+            pickle.dump(val_dataset, f)
 
+# train_dataset.setmode(1)
+# train_dataset.extract_data()
 
-
+val_dataset.setmode(1)
+val_dataset.extract_data()
 
 train_loss = []
 test_acc = []
@@ -102,56 +114,54 @@ start_time = time.time()
 hidden_size =128
 input_size = 20
 
-model = MODEL(input_size, hidden_size, 7).to(device)
+model = GAttNet(input_size, hidden_size, 32, 256, 7).to(device)
 
 num_epochs = 20
 lr = 0.01
-batch_size1 = 4096
-batch_size2 = 512
+batch_size = 1
 save_dir = "/xiongjun/test/MIL/new_saved"
-file_dir = "fixed_dim"
-file_name = "MIL"
+file_dir = "ver1"
+file_name = "gattnet"
 
-criterion = MyLoss()
+criterion = GATTNET_Loss(0.5)
 optimizer = optim.Adam(model.parameters(), lr=lr)
 scaler = GradScaler()
 
 
+# train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
 lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=10, \
-                                    num_training_steps=1067 * topk / batch_size2 * num_epochs)
+                                    num_training_steps=213 * topk / batch_size * num_epochs)
 
 
 for epoch in range(num_epochs): 
     print(f"Epoch {epoch + 1}/{num_epochs}")
-    train_dataset.extract_data()
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size1, shuffle=False)
-    topk_list = inference(model, train_dataloader, device, topk, mode)
-    train_dataset.extract_data(topk_list)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size2, shuffle=True)
-    train_loss_, train_acc_ = train_MIL(model, train_dataloader, criterion, device, lr_decay, optimizer, scaler, lr_scheduler, mode)
+    train_loss_, train_acc_ = train_GATTNET(model, val_dataloader, criterion, device, lr_decay, optimizer, scaler, lr_scheduler, mode)
     train_acc.append(train_acc_)
     train_loss.append(train_loss_)
-
+    print("epoch-{}: trian Acc{}:".format(epoch + 1, train_acc_))
     # val_dataset.setmode(0)
     # val_dataset.extract_data()
     # val_dataloader = DataLoader(val_dataset, batch_size=batch_size1, shuffle=False)
     # topk_list = inference(model, val_dataloader, device, 1, mode)
     # val_acc_ = evaluate(topk_list)
 
-    # val_acc.append(val_acc_)
-    print("Acc:", train_acc_)
-    # if train_acc_ > best_acc:
-    #     if os.path.exists(os.path.join(save_dir, file_name, file_dir)) is False:
-    #         os.makedirs(os.path.join(save_dir, file_name, file_dir))
-    #     best_acc = train_acc_
-    #     best_model = os.path.join(os.path.join(save_dir, file_name, file_dir), "{}-{}-{}.pth".format(file_name, epoch, best_acc))
-    #     torch.save(model.state_dict(), best_model)
-    if os.path.exists(os.path.join(save_dir, file_name, file_dir)) is False:
-        os.makedirs(os.path.join(save_dir, file_name, file_dir))
-    best_acc = train_acc_
-    best_model = os.path.join(os.path.join(save_dir, file_name, file_dir), "{}-{}-{}.pth".format(file_name, epoch, best_acc))
-    torch.save(model.state_dict(), best_model)
+    val_loss_, val_acc_ = test_GATTNET(model, val_dataloader, criterion, epoch, device, mode=mode)
+
+    val_acc.append(val_acc_)
+    
+    if True:
+        if os.path.exists(os.path.join(save_dir, file_name, file_dir)) is False:
+            os.makedirs(os.path.join(save_dir, file_name, file_dir))
+        best_acc = train_acc_
+        best_model = os.path.join(os.path.join(save_dir, file_name, file_dir), "{}-{}-{}.pth".format(file_name, epoch, best_acc))
+        torch.save(model.state_dict(), best_model)
+    # if os.path.exists(os.path.join(save_dir, file_name, file_dir)) is False:
+    #     os.makedirs(os.path.join(save_dir, file_name, file_dir))
+    # best_acc = train_acc_
+    # best_model = os.path.join(os.path.join(save_dir, file_name, file_dir), "{}-{}-{}.pth".format(file_name, epoch, best_acc))
+    # torch.save(model.state_dict(), best_model)
     memory = max_memory_allocated()
     print('memory allocated:',memory/(1024 ** 3), 'G')
 
@@ -162,11 +172,12 @@ print("duration time: {} s".format(duration))
 # Plot the training and validation loss accuracy and learning rate
 fig, axes = plt.subplots(1, 3)
 axes[0].plot(list(range(1, num_epochs + 1)), train_loss, color="r", label="train loss")
+axes[0].plot(list(range(1, num_epochs + 1)), val_loss, color="r", label="val loss")
 axes[0].legend()
 axes[0].set_title("Loss")
 
 axes[1].plot(list(range(1, num_epochs + 1)), train_acc, color="r", label="train acc")
-#axes[1].plot(list(range(1, num_epochs + 1)), val_acc, color="b", label="val acc")
+axes[1].plot(list(range(1, num_epochs + 1)), val_acc, color="b", label="val acc")
 axes[1].legend()
 axes[1].set_title("Accuracy")
 

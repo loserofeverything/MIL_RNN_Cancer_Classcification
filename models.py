@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torch.nn.init as init
+import math
 
 class FeatureExtractor(nn.Module):
     """
@@ -60,3 +61,33 @@ class RNN(nn.Module):
         out, _ = self.rnn(x, h0)
         out = self.fc(out[:, -1, :])
         return out
+    
+class GAttNet(nn.Module):
+    def __init__(self, input_dim, instance_hidden_dim, instance_concepts, bag_hidden_dim, num_class):
+        super(GAttNet, self).__init__()
+        self.W = nn.Parameter(torch.Tensor(instance_hidden_dim, instance_concepts))
+        init.kaiming_uniform_(self.W, a=math.sqrt(5))
+        self.embs = FeatureExtractor(input_dim, instance_hidden_dim)
+        self.V = nn.Parameter(torch.Tensor(instance_hidden_dim, bag_hidden_dim))
+        init.kaiming_uniform_(self.V, a=math.sqrt(5))
+        self.wB = nn.Parameter(torch.Tensor(bag_hidden_dim, 1))
+        init.kaiming_uniform_(self.wB, a=math.sqrt(5))
+        self.fc = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(bag_hidden_dim, num_class)
+            )
+
+    def forward(self, x, ra):
+        fx = self.embs(x, ra)
+        HI = torch.mm(fx.t(), F.softmax(torch.mm(fx, self.W), dim =1))
+        HB = torch.mm(self.V.t(), HI)
+        b = torch.mm(HB, F.softmax(torch.mm(HB.t(), self.wB), dim = 1)).t()
+        outputs = self.fc(b)
+        return outputs, HI
+
+
+# random_tensor = torch.randn(100, 20)
+# random_ra = torch.randn(100, 1)
+# gattnet = GAttNet(20, 128, 32, 64,7)
+# output = gattnet(random_tensor, random_ra)
+# print(output.size())

@@ -350,6 +350,24 @@ class MyLoss(nn.Module):
     def forward(self, outputs, labels):
         return self.loss(outputs, labels)
 
+class GATTNET_Loss(nn.Module):
+    def __init__(self, lambda_coefficient):
+        super(GATTNET_Loss, self).__init__()
+        self.loss = nn.CrossEntropyLoss()
+        self.coe = lambda_coefficient
+
+    def forward(self, outputs, labels, H):
+        H = H.t()
+        N = H.size(0)
+        reg_term = 0
+        for i in range(N):
+            for j in range(i + 1, N):
+                reg_term += torch.dot(F.normalize(H[i], p=2, dim=0), \
+                                F.normalize(H[j], p=2, dim=0))
+        
+        reg_term = reg_term * self.coe / (N * (N - 1) / 2)
+        return self.loss(outputs, labels) + reg_term
+
 def process_data(data):
     return data.apply(ast.literal_eval)
 
@@ -393,7 +411,6 @@ def find_topk(res, topk):
         topk_tuples = sorted(group, key=lambda x: float(x[6]), reverse=True)[:topk]
         # if len(topk_tuples) != topk:
         #     print(f"v1: {v1} has {len(topk_tuples)} elements")
-        # 将提取的元组添加到结果列表中，但是只包括key和v1
         if len(topk_tuples) != topk:
             continue
         result.extend([t for t in topk_tuples])
@@ -415,23 +432,23 @@ def inference(model, dataloader, device, topk, mode="4mer"):
                 RA = tcr_RA.view(-1, 1).to(device)
             outputs = model(data, RA)
             outputs = F.softmax(outputs, dim=1)
-            maxdata, maxidx = torch.max(outputs, dim=1)  # Find max values and their indices
-            maxdata = maxdata.cpu()
-            maxidx = maxidx.cpu().tolist()
-            # outputs = outputs.cpu()
+            # maxdata, maxidx = torch.max(outputs, dim=1)  # Find max values and their indices
+            # maxdata = maxdata.cpu()
+            # maxidx = maxidx.cpu().tolist()
+            outputs = outputs.cpu()
             # 将 outputs 转换为一维并转换为 Python 列表
             # outputs_list = outputs.view(-1).tolist()
             b_l = labels.size(0)
-            # labels_list = labels.view(-1).tolist()
+            labels_list = labels.view(-1).tolist()
             # 向列表中插入新的键值对
             # for key, v1, v2, labels in zip(names, samples, outputs_list, labels_list):
             #     res.append((key, v1, v2, labels))
-            # for j in range(b_l):
-            #     res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
-            #         names[j], labels_list[j], samples[j], outputs[j][6].item()))
             for j in range(b_l):
                 res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
-                    names[j], maxidx[j], samples[j], maxdata[j].item()))
+                    names[j], labels_list[j], samples[j], outputs[j][6].item()))
+            # for j in range(b_l):
+            #     res.append((data[j].cpu().view(4,5).tolist(), _4mer_RA[j].cpu().item(), tcr_RA[j].cpu().item(),\
+            #         names[j], labels_list[j], samples[j], maxdata[j].item()))
         topk_res = find_topk(res, topk)
 
     return topk_res
@@ -579,4 +596,94 @@ def test_RNN(epoch, embedder, rnn, dataloader, criterion, device, save_dir = '/x
             plt.savefig(os.path.join(folder, picname + '.png'))
             plt.close()
 
+    return running_loss / total, running_correct / total
+
+
+def train_GATTNET(model, dataloader, criterion, device, lr_decay, optimizer, scaler, lr_scheduler, mode="4mer"):
+    model.train()
+    running_loss = 0.0
+    running_correct = 0
+    total = 0
+    for batch_idx, (data, _4mer_RA, _tcr_RA, names, labels, samples) in tqdm(enumerate(dataloader), desc=\
+                                                                                "Training", total=len(dataloader)):
+        lr_decay.append(optimizer.state_dict()["param_groups"][0]["lr"])
+        data = data.squeeze(0).to(device)
+        if mode == "4mer":
+            RA = _4mer_RA.view(-1, 1).to(device)
+        else:
+            RA = _tcr_RA.view(-1, 1).to(device)
+        labels = labels[0][0].to(device)
+        # labels = torch.full((data.size(0), 1), label, device=device, dtype=torch.float32)
+        optimizer.zero_grad()
+        with autocast():
+            outputs, HI = model(data, RA)
+            loss = criterion(outputs, labels.view(-1), HI)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        running_loss += loss.item()
+        b_l = 1
+        total += b_l
+        outputs = F.softmax(outputs, dim=1)
+        _, predicted = torch.max(outputs, 1)
+        correct = torch.eq(predicted, labels).sum().item()
+        running_correct += correct
+        lr_scheduler.step()
+    return running_loss / total, running_correct / total
+
+
+def test_GATTNET(model, dataloader, criterion, epoch,device, mode="4mer", choice = True,name='val-gattnet', \
+            save_dir = '/xiongjun/test/MIL/new_saved/figs'):
+    model.eval()
+    running_loss = 0.0
+    running_correct = 0
+    total = 0
+    accu_out = []
+    accu_labels = []
+    with torch.no_grad():
+        for batch_idx, (data, _4mer_RA, _tcr_RA, names, labels, samples) in tqdm(enumerate(dataloader), desc=\
+                                                                                    "Training", total=len(dataloader)):
+
+            data = data.squeeze(0).to(device)
+            if mode == "4mer":
+                RA = _4mer_RA.view(-1, 1).to(device)
+            else:
+                RA = _tcr_RA.view(-1, 1).to(device)
+            labels = labels[0][0].to(device)
+            # labels = torch.full((data.size(0), 1), label, device=device, dtype=torch.float32)
+            outputs, HI = model(data, RA)
+            loss = criterion(outputs, labels.view(-1), HI)
+            loss = loss.item()
+            output = F.softmax(output, dim=1)
+            _, predicted = torch.max(output, 1)
+            correct = torch.eq(predicted, labels).sum().item()
+            running_loss += loss
+            running_correct += correct
+            b_l = 1
+            total += b_l
+            labels = labels.cpu()
+            # 对每个类别绘制ROC曲线
+            output = output.cpu()
+            accu_out.append(output)
+            accu_labels.append(labels)
+
+        if choice == "True":
+            # 使用torch.cat将它们堆叠起来
+            total_out = torch.cat(accu_out, dim=0).numpy()
+            total_labels = torch.cat(accu_labels, dim=0).numpy()
+            for i in range(7):
+                fpr, tpr, _ = roc_curve(total_labels == i, total_out[:, i])
+                roc_auc = auc(fpr, tpr)
+                plt.plot(fpr, tpr, label=f'Class {i} (area = {roc_auc:.2f})')
+
+            plt.plot([0, 1], [0, 1], 'k--')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('ROC Curve')
+            plt.legend(loc="lower right")
+            picname = name + "-" + str(epoch) + '_ROC.png'
+            if os.path.exists(save_dir) is False:
+                os.mkdir(save_dir)
+            plt.savefig(os.path.join(save_dir, picname))
+            plt.close()  
     return running_loss / total, running_correct / total
